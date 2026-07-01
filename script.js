@@ -32,7 +32,7 @@ document.getElementById("switchBtn").addEventListener("click", () => {
 });
 
 /* =========================
-   CAPTURE (IMPROVED CROPPING)
+   CAPTURE (CENTER CROPPED)
 ========================= */
 
 function captureFrame() {
@@ -42,7 +42,6 @@ function captureFrame() {
   canvas.width = video.videoWidth;
   canvas.height = video.videoHeight;
 
-  // Crop center area (removes noise)
   const crop = 0.6;
 
   const sx = video.videoWidth * (1 - crop) / 2;
@@ -56,11 +55,11 @@ function captureFrame() {
 }
 
 /* =========================
-   OCR (IMPROVED)
+   OCR ENGINE
 ========================= */
 
 async function runOCR(imageData) {
-  output.innerText = "Enhancing image...";
+  output.innerText = "Running OCR...";
 
   const img = new Image();
   img.src = imageData;
@@ -77,9 +76,7 @@ async function runOCR(imageData) {
   let imageDataObj = ctx.getImageData(0, 0, canvas.width, canvas.height);
   let data = imageDataObj.data;
 
-  output.innerText = "Cleaning image...";
-
-  // Softer contrast (IMPORTANT FIX)
+  // Softer enhancement (important for engraved text)
   for (let i = 0; i < data.length; i += 4) {
     let r = data[i];
     let g = data[i + 1];
@@ -87,8 +84,8 @@ async function runOCR(imageData) {
 
     let gray = 0.3 * r + 0.59 * g + 0.11 * b;
 
-    // improved contrast (NOT binary threshold)
-    gray = (gray - 128) * 1.4 + 128;
+    // mild contrast boost (NOT destructive thresholding)
+    gray = (gray - 128) * 1.3 + 128;
     gray = Math.max(0, Math.min(255, gray));
 
     data[i] = gray;
@@ -100,19 +97,26 @@ async function runOCR(imageData) {
 
   const processedImage = canvas.toDataURL("image/png");
 
-  output.innerText = "Running OCR...";
-
   const result = await Tesseract.recognize(processedImage, "eng", {
     logger: m => console.log(m),
     tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
-    tessedit_pageseg_mode: Tesseract.PSM.SINGLE_LINE
+    tessedit_pageseg_mode: Tesseract.PSM.SINGLE_WORD
   });
 
-  return fixSerialErrors(result.data.text);
+  const text = result.data.text || "";
+  const confidence = result.data.confidence || 0;
+
+  if (confidence < 60) {
+    output.innerText = "Low confidence — try again";
+    return null;
+  }
+
+  const cleaned = fixSerialErrors(text);
+  return extractBestSerial(cleaned);
 }
 
 /* =========================
-   FIX OCR MISTAKES
+   OCR FIXES
 ========================= */
 
 function fixSerialErrors(text) {
@@ -125,13 +129,12 @@ function fixSerialErrors(text) {
     .toUpperCase();
 }
 
-/* =========================
-   SERIAL VALIDATION
-========================= */
+function extractBestSerial(text) {
+  const matches = text.match(/[A-Z0-9]{10,12}/g);
 
-function validateSerial(text) {
-  const match = text.match(/[A-Z0-9]{10,12}/);
-  return match ? match[0] : null;
+  if (!matches || matches.length === 0) return null;
+
+  return matches.sort((a, b) => b.length - a.length)[0];
 }
 
 /* =========================
@@ -170,8 +173,7 @@ function saveLocal(serial) {
 
     store.put({
       serial,
-      timestamp: Date.now(),
-      synced: false
+      timestamp: Date.now()
     });
 
     tx.oncomplete = resolve;
@@ -217,9 +219,8 @@ async function syncQueue() {
         if (data.success) {
           store.delete(item.serial);
         }
-
       } catch (err) {
-        console.log("Sync failed, retry later");
+        console.log("Sync failed — retry later");
       }
     }
   };
@@ -243,9 +244,7 @@ function addToHistory(serial) {
 
 document.getElementById("scanBtn").addEventListener("click", async () => {
   const image = captureFrame();
-  const text = await runOCR(image);
-
-  const serial = validateSerial(text);
+  const serial = await runOCR(image);
 
   if (!serial) {
     output.innerText = "No valid serial found.";
