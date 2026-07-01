@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>MacBook Serial Scanner</title>
+
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="style.css">
+
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+</head>
+
+<body>
+  <header>
+    <h1>MacBook Serial Scanner</h1>
+    <p>Scan Apple serial numbers using your camera</p>
+  </header>
+
+  <main>
+    <section class="scanner">
+      <video id="video" autoplay playsinline></video>
+      <button id="scanBtn">Scan Serial</button>
+      <button id="switchBtn">Switch Camera</button>
+    </section>
+
+    <section class="results">
+      <h2>Result</h2>
+      <div id="output">Waiting for scan...</div>
+    </section>
+
+    <section class="history">
+      <h2>Scan History</h2>
+      <ul id="historyList"></ul>
+    </section>
+  </main>
+
+  <footer>
+    <p>Offline-enabled PWA • Syncs to Google Sheets</p>
+  </footer>
+
+  <script src="script.js"></script>
+
+  <script>
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("service-worker.js");
+    }
+  </script>
+</body>
+</html>
